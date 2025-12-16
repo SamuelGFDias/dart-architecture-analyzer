@@ -1,0 +1,28 @@
+# Dart Architecture Analyzer
+
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Output files (when testing locally)
+RELATORIO_ARQUITETURA.json
+RELATORIO_ARQUITETURA.md
+
+# Testing
+test_output/
+*.log

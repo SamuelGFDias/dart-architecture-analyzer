@@ -1,0 +1,39 @@
+# .analyseignore
+# 
+# Este arquivo permite definir padrões de arquivos a serem ignorados durante a análise.
+# Coloque este arquivo na raiz do seu projeto Flutter/Dart.
+#
+# Sintaxe:
+# - Linhas começando com # são comentários
+# - Linhas vazias são ignoradas
+# - Padrões com * são wildcards (ex: *.test.dart)
+# - Sufixos simples também funcionam (ex: .mock.dart)
+
+# ====================================
+# Padrões padrão (já incluídos):
+# ====================================
+# .g.dart
+# .freezed.dart
+# .gen.dart
+# .config.dart
+# _web.dart
+
+# ====================================
+# Adicione seus padrões personalizados abaixo:
+# ====================================
+
+# Arquivos de teste
+*.test.dart
+*_test.dart
+
+# Mocks
+*.mock.dart
+*.mocks.dart
+
+# Arquivos gerados por ferramentas específicas
+*.gr.dart
+*.iconfig.dart
+
+# Arquivos experimentais ou temporários
+*.tmp.dart
+*.backup.dart

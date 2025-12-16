@@ -1,0 +1,3 @@
+# Test .analyseignore
+*.test.dart
+*.mock.dart
