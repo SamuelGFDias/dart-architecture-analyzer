@@ -211,6 +211,71 @@ def get_package_name(root_path):
         pass
     return None
 
+def generate_directory_structure(root_path, ignore_patterns, include_files=True):
+    """Gera a estrutura de diretórios do projeto
+    
+    Args:
+        root_path: Caminho raiz do projeto
+        ignore_patterns: Padrões de arquivos a ignorar
+        include_files: Se True, inclui arquivos. Se False, apenas pastas
+    
+    Returns:
+        Lista de dicionários representando a estrutura de diretórios
+    """
+    lib_path = root_path / 'lib'
+    if not lib_path.exists():
+        return []
+    
+    def build_tree(path, prefix=""):
+        """Constrói árvore de diretórios recursivamente"""
+        items = []
+        try:
+            entries = sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name))
+            
+            for entry in entries:
+                if entry.is_dir():
+                    # Sempre inclui diretórios
+                    rel_path = str(entry.relative_to(root_path)).replace('\\', '/')
+                    items.append({
+                        "type": "directory",
+                        "name": entry.name,
+                        "path": rel_path,
+                        "children": build_tree(entry, prefix + "  ")
+                    })
+                elif include_files and entry.suffix == '.dart':
+                    # Inclui arquivo apenas se include_files=True e não for ignorado
+                    if not should_ignore_file(entry.name, ignore_patterns):
+                        rel_path = str(entry.relative_to(root_path)).replace('\\', '/')
+                        items.append({
+                            "type": "file",
+                            "name": entry.name,
+                            "path": rel_path
+                        })
+        except PermissionError:
+            pass
+        
+        return items
+    
+    return build_tree(lib_path)
+
+def format_tree_markdown(tree, prefix="", is_last=True):
+    """Formata árvore de diretórios para Markdown (apenas pastas)"""
+    lines = []
+    
+    for i, item in enumerate(tree):
+        is_last_item = i == len(tree) - 1
+        connector = "└── " if is_last_item else "├── "
+        
+        if item["type"] == "directory":
+            lines.append(f"{prefix}{connector}📁 {item['name']}/")
+            
+            # Recursão para subdiretórios
+            new_prefix = prefix + ("    " if is_last_item else "│   ")
+            if item.get("children"):
+                lines.extend(format_tree_markdown(item["children"], new_prefix, is_last_item))
+    
+    return lines
+
 def generate_recommendations(god_classes, dead_code, duplicates, violations, circular_deps, highly_coupled, high_complexity):
     """Gera recomendações priorizadas e acionáveis para refatoração"""
     recommendations = []
@@ -289,11 +354,14 @@ def generate_recommendations(god_classes, dead_code, duplicates, violations, cir
     
     return recommendations
 
-def generate_json_report(files_to_report, root_path, package_name, ignored_count, is_partial_analysis, circular_deps, output_mode='file', output_file=None):
+def generate_json_report(files_to_report, root_path, package_name, ignored_count, is_partial_analysis, circular_deps, ignore_patterns, output_mode='file', output_file=None):
     """Gera o relatório em formato JSON otimizado para IA"""
     
     if output_file is None:
         output_file = DEFAULT_OUTPUT_NAME
+    
+    # Gera estrutura de diretórios (completa com arquivos)
+    directory_structure = generate_directory_structure(root_path, ignore_patterns, include_files=True)
     
     # Prepara os dados
     files_list = [f.to_dict() for f in files_to_report.values()]
@@ -393,6 +461,7 @@ def generate_json_report(files_to_report, root_path, package_name, ignored_count
             "generator": "Static Dart Analyzer v0.0.1",
             "scope": "Partial (Selected Files)" if is_partial_analysis else "Full Project"
         },
+        "project_structure": directory_structure,
         "summary_kpis": {
             "reported_files": total_files,
             "total_loc": total_loc,
@@ -472,9 +541,12 @@ def generate_json_report(files_to_report, root_path, package_name, ignored_count
             json.dump(report_data, f, indent=2)
         print(f"Relatório JSON gerado: {output_path}")
 
-def generate_markdown_report(files_to_report, root_path, package_name, ignored_count, is_partial_analysis, output_mode='file', output_file=None):
+def generate_markdown_report(files_to_report, root_path, package_name, ignored_count, is_partial_analysis, ignore_patterns, output_mode='file', output_file=None):
     if output_file is None:
         output_file = DEFAULT_OUTPUT_NAME
+    
+    # Gera estrutura de diretórios (apenas pastas)
+    directory_structure = generate_directory_structure(root_path, ignore_patterns, include_files=False)
     
     sorted_by_usage = sorted(files_to_report.values(), key=lambda x: len(x.used_by), reverse=True)
     top_critical = sorted_by_usage[:15]
@@ -493,6 +565,18 @@ def generate_markdown_report(files_to_report, root_path, package_name, ignored_c
     
     content.append("## 🤖 Contexto\n")
     content.append("Este relatório foca apenas nos arquivos solicitados, mas calcula referências globais (quem usa estes arquivos).\n\n")
+    
+    # Adiciona estrutura de pastas
+    content.append("## 📁 Estrutura de Pastas\n")
+    content.append("```\n")
+    content.append("lib/\n")
+    if directory_structure:
+        tree_lines = format_tree_markdown(directory_structure)
+        for line in tree_lines:
+            content.append(line + "\n")
+    else:
+        content.append("(estrutura vazia ou inacessível)\n")
+    content.append("```\n\n")
 
     content.append("## 🔥 Arquivos Críticos (no escopo selecionado)\n")
     if top_critical:
@@ -678,7 +762,7 @@ def analyze_project(root_path_str, output_format='md', target_files=None, output
         files_to_report = all_files
 
     # 6. Output
-    return files_to_report, root_path, package_name, ignored_count, is_partial_analysis, circular_deps
+    return files_to_report, root_path, package_name, ignored_count, is_partial_analysis, circular_deps, ignore_patterns
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -744,12 +828,12 @@ Nota: Quando --output stdout é usado, o jq é automaticamente aplicado para col
     
     args = parser.parse_args()
     
-    files_to_report, root_path, package_name, ignored_count, is_partial, circular_deps = analyze_project(
+    files_to_report, root_path, package_name, ignored_count, is_partial, circular_deps, ignore_patterns = analyze_project(
         os.getcwd(), args.format, args.files, args.output
     )
     
     # Gera o relatório no formato e destino especificados
     if args.format == 'json':
-        generate_json_report(files_to_report, root_path, package_name, ignored_count, is_partial, circular_deps, args.output, args.output_file)
+        generate_json_report(files_to_report, root_path, package_name, ignored_count, is_partial, circular_deps, ignore_patterns, args.output, args.output_file)
     else:
-        generate_markdown_report(files_to_report, root_path, package_name, ignored_count, is_partial, args.output, args.output_file)
+        generate_markdown_report(files_to_report, root_path, package_name, ignored_count, is_partial, ignore_patterns, args.output, args.output_file)
