@@ -1,0 +1,177 @@
+{
+    "meta": {
+        "project": "my_flutter_app",
+        "analysis_date": "2025-12-17T10:30:00",
+        "generator": "Static Dart Analyzer v2.0",
+        "scope": "Full Project"
+    },
+    "summary_kpis": {
+        "reported_files": 125,
+        "total_loc": 15420,
+        "avg_complexity": 18.5,
+        "avg_cognitive_complexity": 14.2
+    },
+    "code_health": {
+        "high_complexity_files": 12,
+        "large_files_count": 8,
+        "highly_coupled_files": 15,
+        "god_classes_count": 3,
+        "dead_code_candidates": 7,
+        "layer_violations_count": 5,
+        "circular_dependencies_count": 2,
+        "technical_debt_score": 615,
+        "health_score": 38
+    },
+    "code_smells": {
+        "god_classes": [
+            {
+                "path": "lib/features/user/user_service.dart",
+                "reasons": [
+                    "Arquivo muito grande (847 LOC)",
+                    "Muitos métodos/funções (45)"
+                ],
+                "metrics": {
+                    "loc": 847,
+                    "complexity": 92,
+                    "classes": 3,
+                    "methods": 45
+                },
+                "suggestion": "Split into smaller, focused modules with single responsibilities"
+            }
+        ],
+        "dead_code_candidates": [
+            {
+                "path": "lib/core/utils/old_logger.dart",
+                "reason": "No references found (potential dead code)"
+            },
+            {
+                "path": "lib/widgets/deprecated_button.dart",
+                "reason": "No references found (potential dead code)"
+            }
+        ],
+        "duplicate_private_members": [
+            {
+                "member_name": "_validateInput",
+                "occurrences": 8,
+                "files": [
+                    "lib/features/login/login_bloc.dart",
+                    "lib/features/register/register_bloc.dart",
+                    "lib/features/profile/profile_bloc.dart",
+                    "lib/features/settings/settings_bloc.dart"
+                ],
+                "suggestion": "Consider extracting to shared utility or base class"
+            },
+            {
+                "member_name": "_showErrorDialog",
+                "occurrences": 6,
+                "files": [
+                    "lib/screens/login_screen.dart",
+                    "lib/screens/register_screen.dart",
+                    "lib/screens/checkout_screen.dart"
+                ],
+                "suggestion": "Consider extracting to shared utility or base class"
+            }
+        ],
+        "layer_violations": [
+            {
+                "file": "lib/presentation/screens/user_profile_screen.dart",
+                "violation": "UI layer importing data layer: package:myapp/data/repositories/user_repository_impl.dart",
+                "severity": "high",
+                "suggestion": "UI should depend on domain layer abstractions, not data implementations"
+            }
+        ],
+        "circular_dependencies": [
+            {
+                "cycle": [
+                    "lib/features/auth/auth_bloc.dart",
+                    "lib/features/auth/auth_repository.dart",
+                    "lib/features/auth/auth_service.dart",
+                    "lib/features/auth/auth_bloc.dart"
+                ],
+                "severity": "high",
+                "suggestion": "Break circular dependency by introducing interfaces or restructuring"
+            }
+        ]
+    },
+    "actionable_recommendations": [
+        {
+            "priority": "CRITICAL",
+            "category": "Architecture",
+            "issue": "Circular Dependencies Detected",
+            "impact": "Prevents proper modularization and testing",
+            "affected_count": 2,
+            "effort": "High",
+            "action": "Break cycles by introducing interfaces/abstractions or restructuring module boundaries"
+        },
+        {
+            "priority": "HIGH",
+            "category": "Architecture",
+            "issue": "Layer Violations",
+            "impact": "Breaks clean architecture principles, increases coupling",
+            "affected_count": 5,
+            "effort": "Medium",
+            "action": "Refactor UI to depend on domain abstractions instead of data implementations"
+        },
+        {
+            "priority": "HIGH",
+            "category": "Code Quality",
+            "issue": "God Classes Detected",
+            "impact": "Hard to maintain, test, and understand",
+            "affected_count": 3,
+            "effort": "High",
+            "action": "Split large classes into focused modules. Start with: lib/features/user/user_service.dart"
+        },
+        {
+            "priority": "MEDIUM",
+            "category": "DRY Principle",
+            "issue": "Duplicate Private Members",
+            "impact": "Code duplication, inconsistent behavior across modules",
+            "affected_count": 15,
+            "effort": "Medium",
+            "action": "Extract common private members to shared utilities or base classes"
+        },
+        {
+            "priority": "MEDIUM",
+            "category": "Code Quality",
+            "issue": "High Complexity Files",
+            "impact": "Difficult to understand and prone to bugs",
+            "affected_count": 12,
+            "effort": "Medium",
+            "action": "Simplify complex logic, extract methods, reduce nesting"
+        }
+    ],
+    "hotspots_top_10": [
+        {
+            "path": "lib/features/payment/payment_service.dart",
+            "risk_score": 1380,
+            "reason": "High coupling (23) x Complexity (60)"
+        },
+        {
+            "path": "lib/core/services/api_client.dart",
+            "risk_score": 1152,
+            "reason": "High coupling (18) x Complexity (64)"
+        }
+    ],
+    "files_inventory": [
+        {
+            "path": "lib/main.dart",
+            "metrics": {
+                "loc": 45,
+                "complexity": 8,
+                "cognitive_complexity": 5,
+                "classes": 1,
+                "widgets": 1,
+                "methods": 3
+            },
+            "dependency_graph": {
+                "imports_count": 5,
+                "used_by_count": 0,
+                "used_by": []
+            },
+            "code_smells": {
+                "is_god_class": false,
+                "god_class_reasons": []
+            }
+        }
+    ]
+}

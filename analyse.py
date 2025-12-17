@@ -72,6 +72,12 @@ class DartFile:
         self.num_widgets = 0
         self.cyclomatic_complexity = 0
         self.cognitive_complexity = 0
+        
+        # Code Smells Detection
+        self.private_members = []  # Lista de nomes de membros privados (_nome)
+        self.class_names = []  # Lista de nomes de classes
+        self.is_god_class = False
+        self.god_class_reasons = []
 
     @property
     def filename(self):
@@ -91,9 +97,16 @@ class DartFile:
             if stripped and not stripped.startswith(('//', '/*', '*')):
                 self.lines_of_code += 1
         
-        self.num_classes = len(re.findall(r'\bclass\s+\w+', content))
+        # Extrai nomes de classes
+        class_matches = re.findall(r'\bclass\s+(\w+)', content)
+        self.class_names = class_matches
+        self.num_classes = len(class_matches)
+        
         self.num_widgets = len(re.findall(r'\bclass\s+\w+\s+extends\s+(StatelessWidget|StatefulWidget|ConsumerWidget|HookWidget|ConsumerStatefulWidget)', content))
         self.num_functions = len(re.findall(r'\b(void|Future|String|int|bool|double|Widget|List|Map|Set)\s+\w+\s*\([^)]*\)\s*(async\s*)?\{', content))
+        
+        # Extrai membros privados (classes, métodos, variáveis que começam com _)
+        self.private_members = list(set(re.findall(r'\b(_\w+)', content)))
         
         # Complexidade Ciclomática simples
         self.cyclomatic_complexity += len(re.findall(r'\bif\b', content))
@@ -119,6 +132,29 @@ class DartFile:
             if stripped.endswith('}'):
                 nesting_depth = max(0, nesting_depth - 1)
         self.cognitive_complexity += max_nesting
+        
+        # Detecção de God Class
+        self._detect_god_class()
+    
+    def _detect_god_class(self):
+        """Detecta se o arquivo é uma God Class baseado em múltiplos critérios"""
+        reasons = []
+        
+        if self.lines_of_code > 500:
+            reasons.append(f"Arquivo muito grande ({self.lines_of_code} LOC)")
+        
+        if self.num_classes > 10:
+            reasons.append(f"Muitas classes em um arquivo ({self.num_classes})")
+        
+        if self.num_functions > 30:
+            reasons.append(f"Muitos métodos/funções ({self.num_functions})")
+        
+        if self.cyclomatic_complexity > 100:
+            reasons.append(f"Complexidade ciclomática muito alta ({self.cyclomatic_complexity})")
+        
+        if reasons:
+            self.is_god_class = True
+            self.god_class_reasons = reasons
 
     def resolve_paths(self, all_files_map):
         self._resolve_list(self.raw_imports, self.resolved_imports, all_files_map)
@@ -140,7 +176,7 @@ class DartFile:
 
     def to_dict(self):
         """Serializa o objeto para JSON"""
-        return {
+        result = {
             "path": str(self.rel_path).replace('\\', '/'),
             "metrics": {
                 "loc": self.lines_of_code,
@@ -154,8 +190,13 @@ class DartFile:
                 "imports_count": len(self.resolved_imports),
                 "used_by_count": len(self.used_by),
                 "used_by": [str(p.relative_to(self.root_path)).replace('\\', '/') for p in self.used_by]
+            },
+            "code_smells": {
+                "is_god_class": self.is_god_class,
+                "god_class_reasons": self.god_class_reasons if self.is_god_class else []
             }
         }
+        return result
 
 def get_package_name(root_path):
     pubspec_path = root_path / 'pubspec.yaml'
@@ -170,7 +211,85 @@ def get_package_name(root_path):
         pass
     return None
 
-def generate_json_report(files_to_report, root_path, package_name, ignored_count, is_partial_analysis, output_mode='file', output_file=None):
+def generate_recommendations(god_classes, dead_code, duplicates, violations, circular_deps, highly_coupled, high_complexity):
+    """Gera recomendações priorizadas e acionáveis para refatoração"""
+    recommendations = []
+    
+    # Prioridade 1: Circular Dependencies (bloqueadores críticos)
+    if circular_deps:
+        recommendations.append({
+            "priority": "CRITICAL",
+            "category": "Architecture",
+            "issue": "Circular Dependencies Detected",
+            "impact": "Prevents proper modularization and testing",
+            "affected_count": len(circular_deps),
+            "effort": "High",
+            "action": "Break cycles by introducing interfaces/abstractions or restructuring module boundaries"
+        })
+    
+    # Prioridade 2: Layer Violations (problemas arquiteturais)
+    if violations:
+        recommendations.append({
+            "priority": "HIGH",
+            "category": "Architecture",
+            "issue": "Layer Violations",
+            "impact": "Breaks clean architecture principles, increases coupling",
+            "affected_count": len(violations),
+            "effort": "Medium",
+            "action": "Refactor UI to depend on domain abstractions instead of data implementations"
+        })
+    
+    # Prioridade 3: God Classes (refatoração urgente)
+    if god_classes:
+        recommendations.append({
+            "priority": "HIGH",
+            "category": "Code Quality",
+            "issue": "God Classes Detected",
+            "impact": "Hard to maintain, test, and understand",
+            "affected_count": len(god_classes),
+            "effort": "High",
+            "action": f"Split large classes into focused modules. Start with: {god_classes[0].rel_path}"
+        })
+    
+    # Prioridade 4: Dead Code (quick wins)
+    if len(dead_code) > 5:
+        recommendations.append({
+            "priority": "MEDIUM",
+            "category": "Cleanup",
+            "issue": "Dead Code Accumulation",
+            "impact": "Increases maintenance burden and confusion",
+            "affected_count": len(dead_code),
+            "effort": "Low",
+            "action": "Remove unused files after verifying they're not dynamic imports"
+        })
+    
+    # Prioridade 5: Duplicate Private Members (oportunidade de modularização)
+    if len(duplicates) > 10:
+        recommendations.append({
+            "priority": "MEDIUM",
+            "category": "DRY Principle",
+            "issue": "Duplicate Private Members",
+            "impact": "Code duplication, inconsistent behavior across modules",
+            "affected_count": len(duplicates),
+            "effort": "Medium",
+            "action": "Extract common private members to shared utilities or base classes"
+        })
+    
+    # Prioridade 6: High Complexity (refatoração gradual)
+    if high_complexity > 5:
+        recommendations.append({
+            "priority": "MEDIUM",
+            "category": "Code Quality",
+            "issue": "High Complexity Files",
+            "impact": "Difficult to understand and prone to bugs",
+            "affected_count": high_complexity,
+            "effort": "Medium",
+            "action": "Simplify complex logic, extract methods, reduce nesting"
+        })
+    
+    return recommendations
+
+def generate_json_report(files_to_report, root_path, package_name, ignored_count, is_partial_analysis, circular_deps, output_mode='file', output_file=None):
     """Gera o relatório em formato JSON otimizado para IA"""
     
     if output_file is None:
@@ -202,6 +321,70 @@ def generate_json_report(files_to_report, root_path, package_name, ignored_count
     high_complexity_files = sum(1 for f in files_to_report.values() if f.cyclomatic_complexity > 50)
     large_files = sum(1 for f in files_to_report.values() if f.lines_of_code > 300)
     highly_coupled = sum(1 for f in files_to_report.values() if len(f.used_by) > 10)
+    
+    # Code Smells Detection
+    god_classes = [f for f in files_to_report.values() if f.is_god_class]
+    
+    # Dead Code Detection (whitelist de entry points comuns)
+    entry_points_whitelist = ['main.dart', 'firebase_options.dart', 'bootstrap.dart', 'app.dart']
+    dead_code_candidates = []
+    for f in files_to_report.values():
+        if len(f.used_by) == 0 and f.filename not in entry_points_whitelist:
+            dead_code_candidates.append({
+                "path": str(f.rel_path).replace('\\', '/'),
+                "reason": "No references found (potential dead code)"
+            })
+    
+    # Detecção de duplicação de membros privados
+    private_members_map = {}
+    for f in files_to_report.values():
+        for member in f.private_members:
+            if member not in private_members_map:
+                private_members_map[member] = []
+            private_members_map[member].append(str(f.rel_path).replace('\\', '/'))
+    
+    duplicate_private_members = []
+    for member, files in private_members_map.items():
+        if len(files) > 1:
+            duplicate_private_members.append({
+                "member_name": member,
+                "occurrences": len(files),
+                "files": files,
+                "suggestion": "Consider extracting to shared utility or base class"
+            })
+    
+    # Ordena por número de ocorrências
+    duplicate_private_members.sort(key=lambda x: x['occurrences'], reverse=True)
+    
+    # Layer Violations Detection (simplified)
+    layer_violations = []
+    for f in files_to_report.values():
+        file_path = str(f.rel_path).replace('\\', '/')
+        
+        # Detecta se é UI layer
+        is_ui_layer = any(pattern in file_path for pattern in ['/presentation/', '/ui/', '/screens/', '/pages/', '/widgets/'])
+        
+        if is_ui_layer:
+            # Verifica se importa diretamente data sources ou repositories
+            for imp in f.raw_imports:
+                if any(pattern in imp for pattern in ['data_source', 'datasource', '/data/', 'repository', '/repo/']):
+                    # Verifica se não é um import de domain (permitido)
+                    if '/domain/' not in imp:
+                        layer_violations.append({
+                            "file": file_path,
+                            "violation": f"UI layer importing data layer: {imp}",
+                            "severity": "high",
+                            "suggestion": "UI should depend on domain layer abstractions, not data implementations"
+                        })
+    
+    # Technical Debt Score calculation
+    tech_debt_score = 0
+    tech_debt_score += len(god_classes) * 50  # God classes são muito custosas
+    tech_debt_score += len(dead_code_candidates) * 10
+    tech_debt_score += len(duplicate_private_members) * 5
+    tech_debt_score += len(layer_violations) * 30
+    tech_debt_score += high_complexity_files * 15
+    tech_debt_score += highly_coupled * 10
 
     report_data = {
         "meta": {
@@ -220,8 +403,34 @@ def generate_json_report(files_to_report, root_path, package_name, ignored_count
             "high_complexity_files": high_complexity_files,
             "large_files_count": large_files,
             "highly_coupled_files": highly_coupled,
-            "health_score": max(0, 100 - (high_complexity_files * 10) - (large_files * 5) - (highly_coupled * 3))
+            "god_classes_count": len(god_classes),
+            "dead_code_candidates": len(dead_code_candidates),
+            "layer_violations_count": len(layer_violations),
+            "circular_dependencies_count": len(circular_deps),
+            "technical_debt_score": tech_debt_score,
+            "health_score": max(0, 100 - (tech_debt_score // 10))
         },
+        "code_smells": {
+            "god_classes": [{
+                "path": str(f.rel_path).replace('\\', '/'),
+                "reasons": f.god_class_reasons,
+                "metrics": {
+                    "loc": f.lines_of_code,
+                    "complexity": f.cyclomatic_complexity,
+                    "classes": f.num_classes,
+                    "methods": f.num_functions
+                },
+                "suggestion": "Split into smaller, focused modules with single responsibilities"
+            } for f in god_classes],
+            "dead_code_candidates": dead_code_candidates,
+            "duplicate_private_members": duplicate_private_members[:20],  # Top 20
+            "layer_violations": layer_violations,
+            "circular_dependencies": circular_deps
+        },
+        "actionable_recommendations": generate_recommendations(
+            god_classes, dead_code_candidates, duplicate_private_members, 
+            layer_violations, circular_deps, highly_coupled, high_complexity_files
+        ),
         "hotspots_top_10": hotspots[:10],
         "files_inventory": files_list
     }
@@ -328,6 +537,58 @@ def generate_markdown_report(files_to_report, root_path, package_name, ignored_c
             md.write(markdown_content)
         print(f"Relatório Markdown gerado: {output_path}")
 
+def detect_circular_dependencies(all_files):
+    """Detecta dependências circulares no grafo de dependências"""
+    circular_deps = []
+    
+    def find_cycle(start_path, current_path, visited, stack):
+        """DFS para encontrar ciclos"""
+        if current_path in stack:
+            # Encontrou ciclo
+            cycle_start = stack.index(current_path)
+            cycle = stack[cycle_start:] + [current_path]
+            return cycle
+        
+        if current_path in visited:
+            return None
+        
+        visited.add(current_path)
+        stack.append(current_path)
+        
+        if current_path in all_files:
+            current_file = all_files[current_path]
+            for imported_path in current_file.resolved_imports:
+                cycle = find_cycle(start_path, imported_path, visited, stack[:])
+                if cycle:
+                    return cycle
+        
+        return None
+    
+    checked = set()
+    for file_path in all_files.keys():
+        if file_path not in checked:
+            cycle = find_cycle(file_path, file_path, set(), [])
+            if cycle:
+                # Converte paths para strings relativos
+                cycle_str = []
+                for p in cycle:
+                    try:
+                        cycle_str.append(str(Path(p).relative_to(all_files[file_path].root_path)).replace('\\', '/'))
+                    except:
+                        cycle_str.append(str(p))
+                
+                # Evita adicionar o mesmo ciclo múltiplas vezes
+                cycle_signature = tuple(sorted(cycle_str))
+                if cycle_signature not in checked:
+                    circular_deps.append({
+                        "cycle": cycle_str,
+                        "severity": "high",
+                        "suggestion": "Break circular dependency by introducing interfaces or restructuring"
+                    })
+                    checked.add(cycle_signature)
+    
+    return circular_deps
+
 def analyze_project(root_path_str, output_format='md', target_files=None, output_mode='file'):
     root_path = Path(root_path_str).resolve()
     package_name = get_package_name(root_path)
@@ -389,6 +650,9 @@ def analyze_project(root_path_str, output_format='md', target_files=None, output
                 for deep_exported_path in effective_exports[imported_path]:
                     if deep_exported_path in all_files:
                         all_files[deep_exported_path].used_by.add(consumer_path)
+    
+    # 4.5. Detecção de Circular Dependencies
+    circular_deps = detect_circular_dependencies(all_files)
 
     # 5. FILTRAGEM (Selecionar apenas o que o usuário pediu para relatar)
     files_to_report = {}
@@ -414,7 +678,7 @@ def analyze_project(root_path_str, output_format='md', target_files=None, output
         files_to_report = all_files
 
     # 6. Output
-    return files_to_report, root_path, package_name, ignored_count, is_partial_analysis
+    return files_to_report, root_path, package_name, ignored_count, is_partial_analysis, circular_deps
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -480,12 +744,12 @@ Nota: Quando --output stdout é usado, o jq é automaticamente aplicado para col
     
     args = parser.parse_args()
     
-    files_to_report, root_path, package_name, ignored_count, is_partial = analyze_project(
+    files_to_report, root_path, package_name, ignored_count, is_partial, circular_deps = analyze_project(
         os.getcwd(), args.format, args.files, args.output
     )
     
     # Gera o relatório no formato e destino especificados
     if args.format == 'json':
-        generate_json_report(files_to_report, root_path, package_name, ignored_count, is_partial, args.output, args.output_file)
+        generate_json_report(files_to_report, root_path, package_name, ignored_count, is_partial, circular_deps, args.output, args.output_file)
     else:
         generate_markdown_report(files_to_report, root_path, package_name, ignored_count, is_partial, args.output, args.output_file)

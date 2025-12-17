@@ -7,11 +7,23 @@ Static analysis tool for Flutter/Dart projects that extracts code metrics, compl
 
 ## ✨ Features
 
+### Core Metrics
 - 🔍 **Code Metrics**: LOC, Cyclomatic Complexity, Cognitive Complexity
 - 🔥 **Hot Spots Detection**: Identifies critical files (high coupling × complexity)
-- 🏥 **Code Health Score**: Overall project health assessment (0-100)
 - 📊 **Dependency Analysis**: Import/export resolution with barrel file support
-- 🤖 **Machine Readable**: JSON output optimized for AI/automation
+
+### Advanced Code Smells Detection
+- 🏛️ **God Classes**: Detects oversized files with too many responsibilities
+- 💀 **Dead Code**: Identifies unused files with no references
+- 🔁 **Circular Dependencies**: Finds dependency cycles in your codebase
+- 📋 **Duplicate Private Members**: Detects repeated private methods/classes across files
+- 🏗️ **Layer Violations**: Identifies architecture boundary violations (e.g., UI → Data)
+
+### Actionable Insights
+- 🎯 **Prioritized Recommendations**: Ranked refactoring suggestions with effort estimates
+- 💰 **Technical Debt Score**: Quantified debt based on all detected issues
+- 🏥 **Code Health Score**: Overall project health assessment (0-100)
+- 🤖 **AI-Optimized Output**: JSON format designed for AI agents and automation
 - 🎨 **jq Integration**: Automatic colorization and filtering support
 
 ## 🚀 Quick Start
@@ -95,8 +107,8 @@ dart-analyse --output stdout | jq '[.files_inventory | sort_by(.metrics.complexi
 {
   "meta": {
     "project": "project_name",
-    "analysis_date": "2025-12-16T16:00:00",
-    "generator": "Static Dart Analyzer v6.0",
+    "analysis_date": "2025-12-17T10:00:00",
+    "generator": "Static Dart Analyzer v2.0",
     "scope": "Full Project"
   },
   "summary_kpis": {
@@ -109,30 +121,91 @@ dart-analyse --output stdout | jq '[.files_inventory | sort_by(.metrics.complexi
     "high_complexity_files": 26,
     "large_files_count": 27,
     "highly_coupled_files": 47,
-    "health_score": 0
+    "god_classes_count": 8,
+    "dead_code_candidates": 15,
+    "layer_violations_count": 12,
+    "circular_dependencies_count": 3,
+    "technical_debt_score": 892,
+    "health_score": 11
   },
+  "code_smells": {
+    "god_classes": [...],
+    "dead_code_candidates": [...],
+    "duplicate_private_members": [...],
+    "layer_violations": [...],
+    "circular_dependencies": [...]
+  },
+  "actionable_recommendations": [
+    {
+      "priority": "CRITICAL",
+      "category": "Architecture",
+      "issue": "Circular Dependencies Detected",
+      "impact": "Prevents proper modularization and testing",
+      "affected_count": 3,
+      "effort": "High",
+      "action": "Break cycles by introducing interfaces/abstractions..."
+    }
+  ],
   "hotspots_top_10": [...],
   "files_inventory": [...]
 }
 ```
 
-## 🔍 Metrics Explained
+## 🔍 Indicators Explained
 
-### Cyclomatic Complexity
+### Core Metrics
+
+#### Cyclomatic Complexity
 Counts control structures: `if`, `else`, `for`, `while`, `case`, `catch`, logical operators (`&&`, `||`, `??`), ternary operators (`?`).
 
-### Cognitive Complexity
+#### Cognitive Complexity
 Considers nesting depth - penalizes structures within structures for readability impact.
 
-### Code Health Score
-- **100**: Excellent code quality
-- **0**: Critical issues
-- Penalties:
-  - Files with complexity > 50: -10 points each
-  - Files with > 300 LOC: -5 points each
-  - Files with > 10 references: -3 points each
+### Code Smells
 
-### Risk Score (Hot Spots)
+#### God Classes
+Files flagged when they exceed thresholds:
+- **LOC > 500**: File is too large
+- **Classes > 10**: Too many classes in one file
+- **Methods > 30**: Too many responsibilities
+- **Complexity > 100**: Overly complex logic
+
+#### Dead Code
+Files with zero references that are not entry points (main.dart, firebase_options.dart, etc.).
+
+#### Duplicate Private Members
+Private methods/classes (`_name`) appearing in multiple files, suggesting need for shared utilities.
+
+#### Layer Violations
+Architecture boundary violations, such as:
+- UI layer directly importing data sources/repositories
+- Presentation importing infrastructure
+
+#### Circular Dependencies
+Dependency cycles between files that prevent proper modularization.
+
+### Health Scores
+
+#### Technical Debt Score
+Weighted sum of all issues:
+- God Classes: 50 points each
+- Layer Violations: 30 points each
+- High Complexity Files: 15 points each
+- High Coupling: 10 points each
+- Dead Code: 10 points each
+- Duplicates: 5 points each
+
+#### Code Health Score
+```
+Health Score = max(0, 100 - (Technical Debt Score / 10))
+```
+- **90-100**: Excellent
+- **70-89**: Good
+- **50-69**: Needs attention
+- **30-49**: Poor
+- **0-29**: Critical
+
+#### Risk Score (Hot Spots)
 ```
 Risk Score = Coupling × Complexity
 ```
@@ -170,8 +243,26 @@ dart-analyse --files $CHANGED_FILES --output stdout | jq '.summary_kpis'
 ### Refactoring - Identify Priorities
 
 ```bash
-# List critical files for refactoring
-dart-analyse --output stdout | jq '.hotspots_top_10[] | select(.risk_score > 1000)'
+# Get prioritized refactoring recommendations
+dart-analyse --output stdout | jq '.actionable_recommendations'
+
+# Find all God Classes
+dart-analyse --output stdout | jq '.code_smells.god_classes'
+
+# List circular dependencies
+dart-analyse --output stdout | jq '.code_smells.circular_dependencies'
+
+# Check for layer violations
+dart-analyse --output stdout | jq '.code_smells.layer_violations'
+
+# Find duplicate private members (top candidates for extraction)
+dart-analyse --output stdout | jq '.code_smells.duplicate_private_members[0:10]'
+
+# List dead code for cleanup
+dart-analyse --output stdout | jq '.code_smells.dead_code_candidates'
+
+# Check technical debt score
+dart-analyse --output stdout | jq '.code_health.technical_debt_score'
 ```
 
 ### Monitoring - Track Trends
